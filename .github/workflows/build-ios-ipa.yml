@@ -30,14 +30,14 @@ jobs:
     steps:
 
       # ==========================================
-      # 1. Download repository
+      # 1. Checkout repository
       # ==========================================
 
       - name: Checkout repository
         uses: actions/checkout@v4
 
       # ==========================================
-      # 2. Select Xcode
+      # 2. Select latest stable Xcode
       # ==========================================
 
       - name: Select latest stable Xcode
@@ -46,7 +46,7 @@ jobs:
           xcode-version: latest-stable
 
       # ==========================================
-      # 3. Show Xcode version
+      # 3. Show Xcode and SDK versions
       # ==========================================
 
       - name: Show Xcode version
@@ -54,7 +54,11 @@ jobs:
         run: |
           set -euo pipefail
 
+          echo "Xcode version:"
           xcodebuild -version
+
+          echo ""
+          echo "iPhoneOS SDK version:"
           xcrun --sdk iphoneos --show-sdk-version
 
       # ==========================================
@@ -66,7 +70,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "Checking project..."
+          echo "Checking Xcode project..."
 
           if [[ ! -d "${PROJECT}" ]]; then
             echo "ERROR: Project not found: ${PROJECT}"
@@ -82,12 +86,13 @@ jobs:
 
           echo ""
           echo "Available targets and schemes:"
+
           xcodebuild \
             -list \
             -project "${PROJECT}"
 
       # ==========================================
-      # 5. Verify the application target exists
+      # 5. Verify application target exists
       # ==========================================
 
       - name: Verify SmartGradeScanner target
@@ -95,32 +100,34 @@ jobs:
         run: |
           set -euo pipefail
 
-          TARGETS="$(
+          TARGET_LIST="$(
             xcodebuild \
               -project "${PROJECT}" \
               -list \
               2>/dev/null
           )"
 
-          echo "${TARGETS}"
+          echo "${TARGET_LIST}"
 
-          if ! echo "${TARGETS}" | grep -q "${TARGET}"; then
+          if ! echo "${TARGET_LIST}" | grep -q "${TARGET}"; then
+            echo ""
             echo "ERROR: Target '${TARGET}' was not found."
             exit 1
           fi
 
           echo ""
-          echo "Application target found:"
-          echo "${TARGET}"
+          echo "Target '${TARGET}' found successfully."
 
       # ==========================================
-      # 6. Clean previous files
+      # 6. Clean old output
       # ==========================================
 
-      - name: Clean previous build
+      - name: Clean previous build files
         shell: bash
         run: |
           set -euo pipefail
+
+          echo "Removing old build files..."
 
           rm -rf build
           rm -rf artifacts
@@ -130,17 +137,12 @@ jobs:
           rm -f SmartGradeScanner-unsigned.app.zip
           rm -f build.log
 
-          mkdir -p build
           mkdir -p artifacts
 
+          echo "Old build files removed."
+
       # ==========================================
-      # 7. Build ONLY the application target
-      #
-      # Important:
-      # We intentionally use -target instead of
-      # xcodebuild test.
-      #
-      # SmartGradeScannerTests is NOT built.
+      # 7. Build ONLY SmartGradeScanner app
       # ==========================================
 
       - name: Build unsigned iPhone application
@@ -149,8 +151,10 @@ jobs:
           set -euo pipefail
           set -o pipefail
 
+          echo "====================================="
           echo "Building application target:"
           echo "${TARGET}"
+          echo "====================================="
 
           xcodebuild \
             -project "${PROJECT}" \
@@ -163,7 +167,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
             PRODUCT_BUNDLE_IDENTIFIER="${BUNDLE_IDENTIFIER}" \
-            clean build \
+            build \
             | tee build.log
 
       # ==========================================
@@ -187,13 +191,11 @@ jobs:
           )"
 
           if [[ -z "${APP_PATH}" ]]; then
-
             echo ""
             echo "ERROR: ${APP_NAME}.app was not found."
             echo ""
             echo "Build directory contents:"
-            find build -maxdepth 8 -print
-
+            find build -maxdepth 8 -print || true
             exit 1
           fi
 
@@ -204,7 +206,7 @@ jobs:
           echo "APP_PATH=${APP_PATH}" >> "${GITHUB_ENV}"
 
       # ==========================================
-      # 9. Verify application
+      # 9. Verify unsigned application
       # ==========================================
 
       - name: Verify unsigned application
@@ -217,26 +219,20 @@ jobs:
             exit 1
           fi
 
-          echo "Checking code signing..."
+          echo "Checking application..."
 
           if [[ -d "${APP_PATH}/_CodeSignature" ]]; then
-
-            echo ""
-            echo "Removing unexpected CodeSignature..."
+            echo "Removing unexpected code signature..."
             rm -rf "${APP_PATH}/_CodeSignature"
-
           fi
 
           if [[ -f "${APP_PATH}/embedded.mobileprovision" ]]; then
-
-            echo ""
             echo "Removing unexpected provisioning profile..."
             rm -f "${APP_PATH}/embedded.mobileprovision"
-
           fi
 
           echo ""
-          echo "Application is ready for unsigned IPA packaging."
+          echo "Unsigned application verified successfully."
 
       # ==========================================
       # 10. Create Payload directory
@@ -247,6 +243,8 @@ jobs:
         run: |
           set -euo pipefail
 
+          echo "Creating Payload..."
+
           rm -rf artifacts/Payload
 
           mkdir -p artifacts/Payload
@@ -255,8 +253,12 @@ jobs:
             "${APP_PATH}" \
             "artifacts/Payload/${APP_NAME}.app"
 
-          test -d "artifacts/Payload/${APP_NAME}.app"
+          if [[ ! -d "artifacts/Payload/${APP_NAME}.app" ]]; then
+            echo "ERROR: Failed to copy application into Payload."
+            exit 1
+          fi
 
+          echo ""
           echo "Payload created successfully."
 
       # ==========================================
@@ -268,7 +270,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "Creating IPA..."
+          echo "Creating unsigned IPA..."
 
           cd artifacts
 
@@ -292,13 +294,15 @@ jobs:
           ls -lh SmartGradeScanner-unsigned.ipa
 
       # ==========================================
-      # 12. Create APP ZIP
+      # 12. Create app ZIP
       # ==========================================
 
       - name: Create application ZIP
         shell: bash
         run: |
           set -euo pipefail
+
+          echo "Creating APP ZIP..."
 
           ditto \
             -c \
@@ -308,14 +312,17 @@ jobs:
             "artifacts/Payload/${APP_NAME}.app" \
             "SmartGradeScanner-unsigned.app.zip"
 
-          test -f "SmartGradeScanner-unsigned.app.zip"
+          if [[ ! -f "SmartGradeScanner-unsigned.app.zip" ]]; then
+            echo "ERROR: APP ZIP creation failed."
+            exit 1
+          fi
 
           echo ""
-          echo "APP ZIP created:"
+          echo "APP ZIP created successfully:"
           ls -lh SmartGradeScanner-unsigned.app.zip
 
       # ==========================================
-      # 13. Generate build information
+      # 13. Generate metadata
       # ==========================================
 
       - name: Generate build metadata
@@ -347,19 +354,48 @@ jobs:
           Development Team ID: None
           Provisioning Profile: None
 
-          Package:
+          Output IPA:
           SmartGradeScanner-unsigned.ipa
+
+          Output APP ZIP:
+          SmartGradeScanner-unsigned.app.zip
 
           Important:
           This IPA is unsigned.
-          It requires signing before normal installation
+          It must be signed before normal installation
           on an iPhone or iPad.
           EOF
 
+          echo ""
+          echo "Build metadata:"
           cat artifacts/BUILD-METADATA.txt
 
       # ==========================================
-      # 14. Display generated files
+      # 14. Verify IPA structure
+      # ==========================================
+
+      - name: Verify IPA structure
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Checking IPA contents..."
+
+          unzip -l SmartGradeScanner-unsigned.ipa | head -50
+
+          if ! unzip -l SmartGradeScanner-unsigned.ipa \
+            | grep -q "Payload/${APP_NAME}.app/"; then
+
+            echo ""
+            echo "ERROR: IPA does not contain expected Payload application."
+            exit 1
+          fi
+
+          echo ""
+          echo "IPA structure verified successfully."
+
+      # ==========================================
+      # 15. Show generated files
       # ==========================================
 
       - name: Show generated files
@@ -368,11 +404,16 @@ jobs:
           set -euo pipefail
 
           echo ""
-          echo "=============================="
-          echo "BUILD FINISHED"
-          echo "=============================="
+          echo "====================================="
+          echo "BUILD FINISHED SUCCESSFULLY"
+          echo "====================================="
 
+          echo ""
+          echo "IPA:"
           ls -lh SmartGradeScanner-unsigned.ipa
+
+          echo ""
+          echo "APP ZIP:"
           ls -lh SmartGradeScanner-unsigned.app.zip
 
           echo ""
@@ -380,7 +421,7 @@ jobs:
           find artifacts/Payload -maxdepth 2 -print
 
       # ==========================================
-      # 15. Upload output to GitHub Actions
+      # 16. Upload IPA artifact
       # ==========================================
 
       - name: Upload SmartGradeScanner IPA
@@ -389,9 +430,23 @@ jobs:
           name: SmartGradeScanner-unsigned-${{ github.sha }}
           if-no-files-found: error
           retention-days: 30
-
           path: |
             SmartGradeScanner-unsigned.ipa
             SmartGradeScanner-unsigned.app.zip
             artifacts/BUILD-METADATA.txt
+            artifacts/Payload/SmartGradeScanner.app
+            build.log
+
+      # ==========================================
+      # 17. Upload build log if build fails
+      # ==========================================
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartGradeScanner-build-error-${{ github.sha }}
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
             build.log
