@@ -2,6 +2,20 @@ import XCTest
 @testable import SmartGradeScanner
 
 final class ThresholdCalibratorTests: XCTestCase {
-    func testSeparatesBlankAndFilledSamples() { let profile = ThresholdCalibrator().calibratedProfile(samples: [0.05, 0.08, 0.09, 0.11, 0.68, 0.72, 0.75, 0.8]); XCTAssertGreaterThan(profile.decisionBoundary, profile.blankCenter); XCTAssertLessThan(profile.decisionBoundary, profile.filledCenter) }
-    func testKeepsBaseForUnseparatedSamples() { let base = CalibrationProfile(); XCTAssertEqual(ThresholdCalibrator().calibratedProfile(samples: [0.1, 0.11, 0.12], base: base), base) }
+    func testSeparatesBlankAndFilledSamples() {
+        let samples = [
+            0.34, 0.37, 0.39, 0.41, 0.42, 0.40, 0.36, 0.44, 0.38, 0.43,
+            0.91, 0.94, 0.89, 0.96
+        ]
+        let profile = ThresholdCalibrator().calibratedProfile(samples: samples)
+        XCTAssertGreaterThan(profile.decisionBoundary, profile.blankCenter)
+        XCTAssertLessThan(profile.decisionBoundary, profile.filledCenter)
+        XCTAssertGreaterThan(profile.minimumSelectionMargin, 0.07)
+    }
+
+    func testKeepsBaseForUnseparatedSamples() {
+        let base = CalibrationProfile()
+        let samples = [0.38, 0.39, 0.40, 0.41, 0.40, 0.39, 0.42, 0.38, 0.41, 0.40, 0.39, 0.41]
+        XCTAssertEqual(ThresholdCalibrator().calibratedProfile(samples: samples, base: base), base)
+    }
 }

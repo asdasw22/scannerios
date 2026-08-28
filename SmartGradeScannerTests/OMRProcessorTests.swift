@@ -18,9 +18,37 @@ final class OMRProcessorTests: XCTestCase {
     }
 
     func testLowConfidenceClassificationNeverSelectsConfidently() {
-        let values = AnswerChoice.allCases.map { BubbleMeasurement(choice: $0, fillRatio: 0.36, darkness: 0.36, confidence: 0.2) }
+        let values = AnswerChoice.allCases.map {
+            BubbleMeasurement(choice: $0, fillRatio: 0.82, darkness: 0.82, confidence: 0.1)
+        }
         let output = BubbleClassifier().classify(measurements: values, profile: CalibrationProfile())
         XCTAssertNotEqual(output.status, .selected)
         XCTAssertLessThan(output.confidence, 0.65)
+    }
+
+    func testAffineAlignmentRecoversSmallCameraShift() {
+        let expected: [CGPoint] = [
+            CGPoint(x: 0.2, y: 0.15), CGPoint(x: 0.75, y: 0.15),
+            CGPoint(x: 0.2, y: 0.55), CGPoint(x: 0.75, y: 0.55),
+            CGPoint(x: 0.2, y: 0.92), CGPoint(x: 0.75, y: 0.92)
+        ]
+        let markers = expected.map { point in
+            DetectedMarker(expectedCenter: point,
+                           center: CGPoint(x: point.x * 0.985 + 0.012, y: point.y * 1.01 - 0.006),
+                           confidence: 0.95,
+                           kind: .registration)
+        }
+        var template = SampleDataSeeder.template()
+        template.markers = expected.map {
+            MarkerDefinition(kind: .registration,
+                             expectedRect: NormalizedRect(x: Double($0.x) - 0.01,
+                                                          y: Double($0.y) - 0.01,
+                                                          width: 0.02,
+                                                          height: 0.02))
+        }
+        template.calibration.minimumMarkerCount = 5
+        let report = TemplateAlignmentService().validate(markers: markers, template: template)
+        XCTAssertTrue(report.isCompatible)
+        XCTAssertLessThan(report.reprojectionError, 0.01)
     }
 }

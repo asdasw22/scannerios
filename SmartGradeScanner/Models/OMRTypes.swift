@@ -29,18 +29,48 @@ struct NormalizedRect: Codable, Equatable, Hashable, Sendable {
     var y: Double
     var width: Double
     var height: Double
+
     var cgRect: CGRect { CGRect(x: x, y: y, width: width, height: height) }
+    var center: CGPoint { CGPoint(x: x + width / 2, y: y + height / 2) }
+    var isInsideUnitPage: Bool {
+        x >= 0 && y >= 0 && width > 0 && height > 0 && x + width <= 1 && y + height <= 1
+    }
+
     init(x: Double, y: Double, width: Double, height: Double) {
-        self.x = x; self.y = y; self.width = width; self.height = height
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
     }
+
     init(_ rect: CGRect, in size: CGSize) {
-        let safeWidth = max(size.width, 1), safeHeight = max(size.height, 1)
-        self.init(x: rect.minX / safeWidth, y: rect.minY / safeHeight,
-                  width: rect.width / safeWidth, height: rect.height / safeHeight)
+        let safeWidth = max(size.width, 1)
+        let safeHeight = max(size.height, 1)
+        self.init(x: rect.minX / safeWidth,
+                  y: rect.minY / safeHeight,
+                  width: rect.width / safeWidth,
+                  height: rect.height / safeHeight)
     }
+
     func rect(in size: CGSize) -> CGRect {
-        CGRect(x: x * size.width, y: y * size.height,
-               width: width * size.width, height: height * size.height)
+        CGRect(x: x * size.width,
+               y: y * size.height,
+               width: width * size.width,
+               height: height * size.height)
+    }
+
+    func expanded(by amount: Double) -> NormalizedRect {
+        NormalizedRect(x: x - amount,
+                       y: y - amount,
+                       width: width + amount * 2,
+                       height: height + amount * 2)
+    }
+
+    func intersectionRatio(with other: NormalizedRect) -> Double {
+        let intersection = cgRect.intersection(other.cgRect)
+        guard !intersection.isNull, intersection.width > 0, intersection.height > 0 else { return 0 }
+        let ownArea = max(width * height, 0.000_001)
+        return Double(intersection.width * intersection.height) / ownArea
     }
 }
 
@@ -70,26 +100,47 @@ struct MarkerDefinition: Codable, Equatable, Hashable, Sendable {
 }
 
 struct CalibrationProfile: Codable, Equatable, Sendable {
-    var blankCenter: Double = 0.08
-    var blankSpread: Double = 0.04
-    var filledCenter: Double = 0.72
-    var filledSpread: Double = 0.12
-    var decisionBoundary: Double = 0.35
-    var weakBoundary: Double = 0.18
-    var minimumSelectionMargin: Double = 0.08
-    var minimumLocalContrast: Double = 0.08
-    var markerReprojectionTolerance: Double = 0.035
-    var minimumMarkerCount: Int = 4
+    var blankCenter: Double = 0.38
+    var blankSpread: Double = 0.08
+    var filledCenter: Double = 0.90
+    var filledSpread: Double = 0.10
+    var decisionBoundary: Double = 0.66
+    var weakBoundary: Double = 0.52
+    var minimumSelectionMargin: Double = 0.12
+    var minimumLocalContrast: Double = 0.06
+    var markerReprojectionTolerance: Double = 0.025
+    var minimumMarkerCount: Int = 5
 }
 
 struct TemplateDefinition: Codable, Equatable, Sendable {
-    var pageAspectRatio: Double = 0.707
+    var pageAspectRatio: Double = 591.0 / 518.0
     var questions: [TemplateQuestionDefinition] = []
     var studentID: StudentIDDefinition?
     var markers: [MarkerDefinition] = []
     var ignoredAreas: [NormalizedRect] = []
     var calibration = CalibrationProfile()
     var revision: Int = 1
+
+    var answerBounds: NormalizedRect? {
+        let rects = questions.flatMap(\.bubbles).map(\.rect)
+        guard let first = rects.first else { return nil }
+        let union = rects.dropFirst().reduce(first.cgRect) { $0.union($1.cgRect) }
+        return NormalizedRect(x: Double(union.minX),
+                              y: Double(union.minY),
+                              width: Double(union.width),
+                              height: Double(union.height))
+    }
+
+    var hasSafeSeparatedRegions: Bool {
+        guard questions.allSatisfy({ $0.bubbles.allSatisfy { $0.rect.isInsideUnitPage } }) else { return false }
+        guard let studentID else { return true }
+        guard studentID.region.isInsideUnitPage,
+              studentID.columns.allSatisfy(\.isInsideUnitPage),
+              studentID.digitRows.allSatisfy(\.isInsideUnitPage) else { return false }
+        return questions
+            .flatMap(\.bubbles)
+            .allSatisfy { $0.rect.intersectionRatio(with: studentID.region) < 0.08 }
+    }
 }
 
 struct BubbleMeasurement: Codable, Equatable, Sendable {
@@ -108,7 +159,9 @@ struct OMRQuestionResult: Codable, Equatable, Sendable, Identifiable {
     var confidence: Double
     var measurements: [BubbleMeasurement]
     var weight: Double = 1
-    var isCorrect: Bool { status == .selected && selectedChoices.count == 1 && selectedChoices.first == correctChoice }
+    var isCorrect: Bool {
+        status == .selected && selectedChoices.count == 1 && selectedChoices.first == correctChoice
+    }
 }
 
 struct OMRProcessingResult: Codable, Equatable, Sendable {

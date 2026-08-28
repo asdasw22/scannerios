@@ -3,6 +3,17 @@ import XCTest
 
 final class StudentIDDetectorTests: XCTestCase {
     func testDefinitionHasNineColumnsAndTenRows() {
-        let template = SampleDataSeeder.template(); XCTAssertEqual(template.studentID?.columns.count, 9); XCTAssertEqual(template.studentID?.digitRows.count, 10); XCTAssertEqual(template.studentID?.prefix, "320")
+        let template = SampleDataSeeder.template()
+        XCTAssertEqual(template.studentID?.columns.count, 9)
+        XCTAssertEqual(template.studentID?.digitRows.count, 10)
+        XCTAssertEqual(template.studentID?.prefix, "320")
+    }
+
+    func testReferenceTemplateSeparatesIDFromAnswers() {
+        let template = SampleDataSeeder.template()
+        XCTAssertTrue(template.hasSafeSeparatedRegions)
+        XCTAssertGreaterThan(template.pageAspectRatio, 1.0)
+        XCTAssertEqual(template.markers.count, 9)
+        XCTAssertEqual(template.revision, 3)
     }
 }

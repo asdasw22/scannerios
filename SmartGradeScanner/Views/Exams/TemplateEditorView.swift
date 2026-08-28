@@ -28,7 +28,7 @@ struct TemplateEditorView: View {
     private var editorCanvas: some View {
         ScrollView([.vertical, .horizontal]) {
             ZStack(alignment: .topLeading) {
-                Rectangle().fill(Color(uiColor: .secondarySystemBackground)).aspectRatio(0.707, contentMode: .fit).frame(minWidth: 360, minHeight: 510)
+                Rectangle().fill(Color(uiColor: .secondarySystemBackground)).aspectRatio(CGFloat(exam.template?.definition.pageAspectRatio ?? SampleDataSeeder.template().pageAspectRatio), contentMode: .fit).frame(minWidth: 360)
                 VStack(alignment: .leading, spacing: 8) {
                     Text(exam.name).font(.title3.bold()).padding(.bottom, 6)
                     Text("Template coordinate space").font(.caption).foregroundStyle(.secondary)
@@ -41,7 +41,7 @@ struct TemplateEditorView: View {
                     Spacer(minLength: 10)
                     Text("Student ID grid · 9 columns × 10 rows").font(.caption).foregroundStyle(.secondary)
                 }.padding(32)
-            }.frame(width: 420, height: 650)
+            }.frame(width: 420).aspectRatio(CGFloat(exam.template?.definition.pageAspectRatio ?? SampleDataSeeder.template().pageAspectRatio), contentMode: .fit)
         }.background(.background)
     }
 }
