@@ -71,3 +71,7 @@ The implementation follows the same core principles used in established document
 - normalized-coordinate stability
 - perspective error measurement
 - affine marker alignment recovery
+
+## OMR Ultra v6 note
+
+The v6 scanner is optimized for the supplied 591 x 520 landscape reference sheet. Use **Fast OMR** (normal camera shutter) or the Photos button. The scanner intentionally rejects tight crops of the Student ID grid or answer block instead of attempting to grade them.

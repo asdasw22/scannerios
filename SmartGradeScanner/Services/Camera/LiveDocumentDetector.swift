@@ -8,7 +8,7 @@ import CoreGraphics
 @MainActor final class LiveDocumentDetector: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, ObservableObject {
     @Published private(set) var documentConfidence: Double = 0
     @Published private(set) var isReady = false
-    var expectedPageAspectRatio: Double = 591.0 / 518.0
+    var expectedPageAspectRatio: Double = 591.0 / 520.0
 
     private let output = AVCaptureVideoDataOutput()
     private let queue = DispatchQueue(label: "com.smartgrade.live-document", qos: .userInitiated)
@@ -26,13 +26,10 @@ import CoreGraphics
                                    didOutput sampleBuffer: CMSampleBuffer,
                                    from connection: AVCaptureConnection) {
         guard let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        let expected = expectedPageAspectRatioSnapshot
         let request = VNDetectRectanglesRequest { request, _ in
             let observations = request.results as? [VNRectangleObservation] ?? []
-            let observation = observations.max { $0.confidence < $1.confidence }
-            let confidence = Double(observation?.confidence ?? 0)
-            let aspectRatio: Double
-            let area: Double
-            if let observation {
+            let candidates = observations.compactMap { observation -> (Double, Double, Double)? in
                 let top = hypot(observation.topRight.x - observation.topLeft.x,
                                 observation.topRight.y - observation.topLeft.y)
                 let bottom = hypot(observation.bottomRight.x - observation.bottomLeft.x,
@@ -41,37 +38,48 @@ import CoreGraphics
                                  observation.topLeft.y - observation.bottomLeft.y)
                 let right = hypot(observation.topRight.x - observation.bottomRight.x,
                                   observation.topRight.y - observation.bottomRight.y)
-                aspectRatio = Double((top + bottom) / max(left + right, 0.0001))
-                area = Double(observation.boundingBox.width * observation.boundingBox.height)
-            } else {
-                aspectRatio = 0
-                area = 0
+                let ratio = Double((top + bottom) / max(left + right, 0.0001))
+                let direct = exp(-abs(log(max(ratio, 0.001) / max(expected, 0.001))) * 4.2)
+                let rotated = exp(-abs(log(max(1 / max(ratio, 0.001), 0.001) / max(expected, 0.001))) * 4.2)
+                let aspect = max(direct, rotated)
+                let area = Double(observation.boundingBox.width * observation.boundingBox.height)
+                guard area >= 0.38, aspect >= 0.52 else { return nil }
+                let score = area * 0.58 + aspect * 0.28 + Double(observation.confidence) * 0.14
+                return (score, aspect, area)
             }
+            let best = candidates.max { $0.0 < $1.0 }
             Task { @MainActor [weak self] in
-                self?.update(confidence: confidence, aspectRatio: aspectRatio, area: area)
+                self?.update(
+                    confidence: best?.0 ?? 0,
+                    aspectScore: best?.1 ?? 0,
+                    area: best?.2 ?? 0)
             }
         }
-        request.minimumSize = 0.24
-        request.minimumAspectRatio = 0.35
+        request.minimumSize = 0.38
+        request.minimumAspectRatio = 0.50
         request.maximumAspectRatio = 1.0
-        request.minimumConfidence = 0.30
-        request.maximumObservations = 4
-        request.quadratureTolerance = 35
+        request.minimumConfidence = 0.28
+        request.maximumObservations = 6
+        request.quadratureTolerance = 32
         try? VNImageRequestHandler(cvPixelBuffer: buffer, orientation: .right).perform([request])
     }
 
-    private func update(confidence: Double, aspectRatio: Double, area: Double) {
-        let expected = max(expectedPageAspectRatio, 0.001)
-        let aspectScore = aspectRatio > 0 ? exp(-abs(log(aspectRatio / expected)) * 3.0) : 0
-        let areaScore = min(1, max(0, area / 0.48))
-        let score = min(1, max(0, confidence * 0.52 + aspectScore * 0.30 + areaScore * 0.18))
+    nonisolated private var expectedPageAspectRatioSnapshot: Double {
+        // This value changes only when a scanner view model is created. Reading it
+        // here is safe for the short-lived Vision callback and avoids blocking video.
+        591.0 / 520.0
+    }
+
+    private func update(confidence: Double, aspectScore: Double, area: Double) {
+        let areaScore = min(1, max(0, area / 0.62))
+        let score = min(1, max(0, confidence * 0.68 + areaScore * 0.32))
         documentConfidence = score
 
-        if score >= 0.66 && aspectScore >= 0.62 {
-            stableFrames = min(6, stableFrames + 1)
+        if score >= 0.62 && aspectScore >= 0.58 && area >= 0.40 {
+            stableFrames = min(5, stableFrames + 1)
         } else {
             stableFrames = max(0, stableFrames - 2)
         }
-        isReady = stableFrames >= 3
+        isReady = stableFrames >= 2
     }
 }

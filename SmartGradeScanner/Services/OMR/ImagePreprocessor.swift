@@ -33,7 +33,7 @@ struct ImagePreprocessor: Sendable {
     func correctedImage(from image: CGImage,
                         corners: [CGPoint],
                         targetAspectRatio: Double,
-                        longEdge: CGFloat = 2200) -> CGImage? {
+                        longEdge: CGFloat = 1600) -> CGImage? {
         guard corners.count == 4, targetAspectRatio > 0 else { return image }
         let context = CIContext(options: [.useSoftwareRenderer: false])
         let input = CIImage(cgImage: image)
@@ -48,11 +48,16 @@ struct ImagePreprocessor: Sendable {
 
         let translated = corrected.transformed(by: CGAffineTransform(translationX: -corrected.extent.minX,
                                                                      y: -corrected.extent.minY))
+        // Never upscale a small already-clean scan to several megapixels. OMR only
+        // needs enough pixels to measure the bubbles; avoiding unnecessary upscale
+        // makes photo-library scans much faster.
+        let sourceLongEdge = max(translated.extent.width, translated.extent.height)
+        let effectiveLongEdge = max(500, min(longEdge, sourceLongEdge))
         let targetSize: CGSize
         if targetAspectRatio >= 1 {
-            targetSize = CGSize(width: longEdge, height: longEdge / CGFloat(targetAspectRatio))
+            targetSize = CGSize(width: effectiveLongEdge, height: effectiveLongEdge / CGFloat(targetAspectRatio))
         } else {
-            targetSize = CGSize(width: longEdge * CGFloat(targetAspectRatio), height: longEdge)
+            targetSize = CGSize(width: effectiveLongEdge * CGFloat(targetAspectRatio), height: effectiveLongEdge)
         }
 
         let scaleX = targetSize.width / max(translated.extent.width, 1)
