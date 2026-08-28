@@ -15,11 +15,14 @@ The OMR path is deliberately **fail-closed**: when alignment, Student ID, image 
 - Marker correspondences drive a robust affine template correction with outlier rejection and reprojection-error checks.
 - Answer and Student ID regions are geometrically separated and validated before reading, preventing the ID grid from being interpreted as answer bubbles.
 - Bubble darkness uses a local background estimate rather than a hard-coded global grayscale threshold.
+- Question bubbles and Student ID cells are calibrated independently per capture, so the dense numeric grid cannot shift the answer threshold.
+- Bubble analysis uses an inner elliptical mask, reducing false marks from the printed circle outline and option glyphs.
 - The sheet calibrates blank-vs-filled signal clusters per capture (two-cluster calibration), which handles shadows, different printers, pens, and exposure changes substantially better than a fixed threshold.
 - Student ID columns require one clearly dominant digit; ambiguous columns are rejected rather than guessed.
+- A failed reference-sheet alignment is never retried with a different physical layout; this specifically prevents Student ID rows from being reinterpreted as A/B/C/D/E answers.
 - Image quality has usable/ideal bands. Borderline photos can still be processed but are explicitly marked for review.
 - Camera capture prioritizes photo quality and continuous focus/exposure/white balance.
-- The review screen displays the aligned sheet, confidence, warnings, and per-question status.
+- The review screen displays the aligned sheet, Student ID confidence, correct answer, per-question status, and optional developer overlays with every bubble signal and registration diagnostic.
 - The custom Info.plist now contains the required bundle metadata for normal IPA signing tools.
 - A complete AppIcon asset is included.
 
@@ -28,13 +31,13 @@ The OMR path is deliberately **fail-closed**: when alignment, Student ID, image 
 The bundled `SampleDataSeeder.template()` is calibrated to the supplied reference answer sheet:
 
 - 20 questions
-- 5 choices (`A...E`)
+- 4 or 5 choices (`A...D` / `A...E`), with unused physical columns excluded from scanning
 - Questions 1–17 in the left answer block
 - Questions 18–20 in the upper middle block
 - 9 Student ID columns × 10 digit rows
 - Student ID prefix `320`
 - 9 registration markers
-- reference page width/height ≈ `591/518`
+- reference page width/height = `591/520`
 
 If a different paper design is used, its exact bubble and marker positions still need a matching `TemplateDefinition`; no safe OMR system can infer arbitrary layouts from coordinates belonging to another form.
 
