@@ -194,7 +194,7 @@ private struct ScanReviewView: View {
               "Scale Y",
               value: debug.alignmentScaleY.formatted(.number.precision(.fractionLength(3))))
             LabeledContent(
-              "Rotation", value: "\(debug.alignmentRotationDegrees, specifier: "%.2f") deg")
+              "Rotation", value: debug.alignmentRotationDegrees.formatted(.number.precision(.fractionLength(2))) + " deg")
             LabeledContent(
               "Max drift",
               value: debug.maximumAlignmentDrift.formatted(.number.precision(.fractionLength(4))))
