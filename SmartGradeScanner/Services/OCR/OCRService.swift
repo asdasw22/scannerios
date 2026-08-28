@@ -1,15 +1,17 @@
 import Foundation
-import Vision
+@preconcurrency import Vision
+import CoreGraphics
+import ImageIO
 
 struct OCRService: Sendable {
-    func recognizeText(in image: CGImage) async -> [String] {
-        await withCheckedContinuation { continuation in
-            let request = VNRecognizeTextRequest { request, _ in
-                let texts = (request.results as? [VNRecognizedTextObservation])?.compactMap { $0.topCandidates(1).first?.string } ?? []
-                continuation.resume(returning: texts)
-            }
-            request.recognitionLevel = .fast; request.usesLanguageCorrection = false
-            DispatchQueue.global(qos: .utility).async { try? VNImageRequestHandler(cgImage: image, orientation: .up).perform([request]) }
-        }
+    func recognizeText(in imageData: Data) async -> [String] {
+        await Task.detached(priority: .utility) {
+            guard let source = CGImageSourceCreateWithData(imageData as CFData, nil), let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return [] }
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .fast
+            request.usesLanguageCorrection = false
+            try? VNImageRequestHandler(cgImage: image, orientation: .up).perform([request])
+            return (request.results as? [VNRecognizedTextObservation])?.compactMap { $0.topCandidates(1).first?.string } ?? []
+        }.value
     }
 }

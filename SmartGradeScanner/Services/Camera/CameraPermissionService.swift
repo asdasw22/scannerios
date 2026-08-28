@@ -1,4 +1,5 @@
-import AVFoundation
+@preconcurrency import AVFoundation
+import Foundation
 
 enum CameraPermissionService {
     static func request() async -> Bool {

@@ -19,21 +19,45 @@ import UIKit
     func startCamera() async { await camera.configure() }
     func capture() { camera.capture() }
     func process(image: CGImage) {
-        selectedImage = image; isProcessing = true; error = nil
+        selectedImage = image
+        guard let imageData = ImageRenderer.jpegData(from: image) else {
+            error = .message("تعذر تجهيز الصورة للتحليل.")
+            return
+        }
+        process(imageData: imageData)
+    }
+
+    func process(imageData: Data) {
+        isProcessing = true; error = nil
         let definition = exam?.template?.definition ?? SampleDataSeeder.template()
         let key = exam?.answerKey?.entries ?? [:]
-        let updateProgress: @Sendable (OMRProcessingStage) -> Void = { [weak self] stage in
-            Task { @MainActor in self?.stage = stage }
+        let omrProcessor = processor
+        stage = .detectingPaper
+        let updateProgress: @MainActor @Sendable (OMRProcessingStage) -> Void = { [weak self] stage in
+            self?.stage = stage
         }
-        Task.detached(priority: .userInitiated) { [processor] in
+        Task { [weak self, omrProcessor] in
+            guard let self else { return }
             do {
-                let value = try await processor.process(image: image, template: definition, answerKey: key, progress: updateProgress)
-                await MainActor.run { self.result = value; self.isProcessing = false }
+                let value = try await Task.detached(priority: .userInitiated) {
+                    try await omrProcessor.process(imageData: imageData, template: definition, answerKey: key, progress: updateProgress)
+                }.value
+                guard !Task.isCancelled else { return }
+                self.result = value
+                self.isProcessing = false
             } catch {
-                await MainActor.run { self.error = .message(error.localizedDescription); self.isProcessing = false }
+                self.error = .message(error.localizedDescription)
+                self.isProcessing = false
             }
         }
     }
-    func process(uiImage: UIImage) { if let image = uiImage.cgImage { process(image: image) } }
+    func process(uiImage: UIImage) {
+        guard let imageData = uiImage.jpegData(compressionQuality: 0.92) else {
+            error = .message("تعذر تجهيز الصورة للتحليل.")
+            return
+        }
+        if let image = uiImage.cgImage { selectedImage = image }
+        process(imageData: imageData)
+    }
     func stopCamera() { camera.stop() }
 }

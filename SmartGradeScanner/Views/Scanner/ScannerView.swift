@@ -18,9 +18,9 @@ struct ScannerView: View {
         .navigationTitle("Scan").navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.startCamera() }
         .onDisappear { viewModel.stopCamera() }
-        .onReceive(viewModel.camera.$lastImage.compactMap { $0 }) { image in viewModel.process(image: image) }
+        .onReceive(viewModel.camera.$lastImageData.compactMap { $0 }) { imageData in viewModel.process(imageData: imageData) }
         .onChange(of: selectedPhoto) { _, item in guard let item else { return }; Task { if let data = try? await item.loadTransferable(type: Data.self), let uiImage = UIImage(data: data) { viewModel.process(uiImage: uiImage) } } }
-        .sheet(isPresented: $viewModel.isShowingDocumentScanner) { DocumentScannerView(onImage: { viewModel.process(uiImage: $0); viewModel.isShowingDocumentScanner = false }, onCancel: { viewModel.isShowingDocumentScanner = false }) }
+        .sheet(isPresented: $viewModel.isShowingDocumentScanner) { DocumentScannerView(onImageData: { viewModel.process(imageData: $0); viewModel.isShowingDocumentScanner = false }, onCancel: { viewModel.isShowingDocumentScanner = false }) }
         .sheet(isPresented: Binding(get: { viewModel.result != nil && !viewModel.isProcessing }, set: { if !$0 { viewModel.result = nil } })) { if let result = viewModel.result { ScanReviewView(result: result, exam: viewModel.exam, context: context) } }
         .alert(item: $viewModel.error) { error in Alert(title: Text("Scan failed"), message: Text(error.localizedDescription), dismissButton: .default(Text("OK"))) }
     }

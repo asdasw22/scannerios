@@ -17,12 +17,7 @@ struct SmartGradeScannerApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
-                .task {
-                    SampleDataSeeder.seedIfNeeded(
-                        in: container.mainContext
-                    )
-                }
+                .modelContainer(container)
         }
-        .modelContainer(container)
     }
 }

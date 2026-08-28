@@ -2,6 +2,7 @@ import Foundation
 import SwiftData
 
 enum SampleDataSeeder {
+    @MainActor
     static func seedIfNeeded(in context: ModelContext) {
         let descriptor = FetchDescriptor<Classroom>()
         guard (try? context.fetchCount(descriptor)) == 0 else { return }
@@ -14,9 +15,11 @@ enum SampleDataSeeder {
             Student(studentID: "320234561207", name: "Lina Samir", grade: "Grade 8", section: "A", classroom: classroom)
         ].forEach { context.insert($0) }
         let exam = Exam(name: "Science Quiz", subject: "Science", classroom: classroom, numberOfQuestions: 20)
-        exam.answerKey = AnswerKey(name: "Science Quiz Key", entries: Dictionary(uniqueKeysWithValues: (1...20).map { ($0, AnswerChoice.allCases[($0 - 1) % 5]) }))
-        exam.template = ExamTemplate(name: "Science Answer Sheet", definition: SampleDataSeeder.template())
-        context.insert(exam.answerKey!); context.insert(exam.template!); context.insert(exam)
+        let answerKey = AnswerKey(name: "Science Quiz Key", entries: Dictionary(uniqueKeysWithValues: (1...20).map { ($0, AnswerChoice.allCases[($0 - 1) % 5]) }))
+        let template = ExamTemplate(name: "Science Answer Sheet", definition: SampleDataSeeder.template())
+        exam.answerKey = answerKey
+        exam.template = template
+        context.insert(answerKey); context.insert(template); context.insert(exam)
         try? context.save()
     }
 
