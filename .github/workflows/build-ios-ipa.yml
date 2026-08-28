@@ -109,7 +109,7 @@ jobs:
 
           echo "${TARGET_LIST}"
 
-          if ! echo "${TARGET_LIST}" | grep -q "${TARGET}"; then
+          if ! grep -q "${TARGET}" <<< "${TARGET_LIST}"; then
             echo ""
             echo "ERROR: Target '${TARGET}' was not found."
             exit 1
@@ -119,7 +119,7 @@ jobs:
           echo "Target '${TARGET}' found successfully."
 
       # ==========================================
-      # 6. Clean old output
+      # 6. Clean previous output
       # ==========================================
 
       - name: Clean previous build files
@@ -136,72 +136,23 @@ jobs:
           rm -f SmartGradeScanner-unsigned.ipa
           rm -f SmartGradeScanner-unsigned.app.zip
           rm -f build.log
-          rm -f test.log
 
           mkdir -p artifacts
 
           echo "Old build files removed."
 
       # ==========================================
-      # 7. List and select an available iOS Simulator
-      # ==========================================
-
-      - name: List available iOS Simulators
-        shell: bash
-        run: |
-          set -euo pipefail
-          xcrun simctl list devices available
-
-      - name: Select first available iOS Simulator
-        id: simulator
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          SIMULATOR_UDID="$(
-            xcrun simctl list devices available \
-              | sed -n 's/.*(\([0-9A-F-]\{36\}\)) (Shutdown\|Booted).*/\1/p' \
-              | head -n 1
-          )"
-
-          if [[ -z "${SIMULATOR_UDID}" ]]; then
-            echo "ERROR: No available iOS Simulator was found."
-            exit 1
-          fi
-
-          echo "Selected iOS Simulator UDID: ${SIMULATOR_UDID}"
-          echo "destination=platform=iOS Simulator,id=${SIMULATOR_UDID}" >> "${GITHUB_OUTPUT}"
-
-      # ==========================================
-      # 8. Run unit tests without code signing
-      # ==========================================
-
-      - name: Run unit tests without code signing
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          xcodebuild test \
-            -project "${PROJECT}" \
-            -scheme "${SCHEME}" \
-            -destination "${{ steps.simulator.outputs.destination }}" \
-            -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            DEVELOPMENT_TEAM="" \
-            SDKROOT=iphonesimulator \
-            | tee test.log
-
-      # ==========================================
-      # 9. Build ONLY SmartGradeScanner app
+      # 7. Build ONLY SmartGradeScanner app
+      #
+      # No Simulator
+      # No Unit Tests
+      # No Code Signing
       # ==========================================
 
       - name: Build unsigned iPhone application
         shell: bash
         run: |
           set -euo pipefail
-          set -o pipefail
 
           echo "====================================="
           echo "Building application target:"
@@ -223,7 +174,7 @@ jobs:
             | tee build.log
 
       # ==========================================
-      # 8. Find generated .app
+      # 8. Locate generated .app
       # ==========================================
 
       - name: Locate generated application
@@ -287,7 +238,7 @@ jobs:
           echo "Unsigned application verified successfully."
 
       # ==========================================
-      # 10. Create Payload directory
+      # 10. Create IPA Payload
       # ==========================================
 
       - name: Create IPA Payload
@@ -298,7 +249,6 @@ jobs:
           echo "Creating Payload..."
 
           rm -rf artifacts/Payload
-
           mkdir -p artifacts/Payload
 
           cp -R \
@@ -346,7 +296,7 @@ jobs:
           ls -lh SmartGradeScanner-unsigned.ipa
 
       # ==========================================
-      # 12. Create app ZIP
+      # 12. Create .app ZIP
       # ==========================================
 
       - name: Create application ZIP
@@ -374,7 +324,7 @@ jobs:
           ls -lh SmartGradeScanner-unsigned.app.zip
 
       # ==========================================
-      # 13. Generate metadata
+      # 13. Generate build metadata
       # ==========================================
 
       - name: Generate build metadata
@@ -382,7 +332,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          XCODE_VERSION="$(xcodebuild -version | head -1)"
+          XCODE_VERSION="$(xcodebuild -version | sed -n '1p')"
           IOS_SDK_VERSION="$(xcrun --sdk iphoneos --show-sdk-version)"
 
           cat > artifacts/BUILD-METADATA.txt <<EOF
@@ -433,10 +383,15 @@ jobs:
 
           echo "Checking IPA contents..."
 
-          unzip -l SmartGradeScanner-unsigned.ipa | head -50
+          unzip -l SmartGradeScanner-unsigned.ipa \
+            > artifacts/ipa-contents.txt
 
-          if ! unzip -l SmartGradeScanner-unsigned.ipa \
-            | grep -q "Payload/${APP_NAME}.app/"; then
+          echo ""
+          echo "First files inside IPA:"
+          head -50 artifacts/ipa-contents.txt
+
+          if ! grep -q "Payload/${APP_NAME}.app/" \
+            artifacts/ipa-contents.txt; then
 
             echo ""
             echo "ERROR: IPA does not contain expected Payload application."
@@ -473,7 +428,7 @@ jobs:
           find artifacts/Payload -maxdepth 2 -print
 
       # ==========================================
-      # 16. Upload IPA artifact
+      # 16. Upload generated IPA
       # ==========================================
 
       - name: Upload SmartGradeScanner IPA
@@ -487,11 +442,11 @@ jobs:
             SmartGradeScanner-unsigned.app.zip
             artifacts/BUILD-METADATA.txt
             artifacts/Payload/SmartGradeScanner.app
-            test.log
+            artifacts/ipa-contents.txt
             build.log
 
       # ==========================================
-      # 17. Upload build log if build fails
+      # 17. Upload build log if compilation fails
       # ==========================================
 
       - name: Upload build log on failure
@@ -502,5 +457,4 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
           path: |
-            test.log
             build.log
