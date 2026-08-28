@@ -32,7 +32,7 @@ jobs:
         with:
           xcode-version: latest-stable
 
-      - name: Validate iOS project and shared scheme
+      - name: Validate project files and shared iOS scheme
         shell: bash
         run: |
           set -euo pipefail
@@ -57,27 +57,6 @@ jobs:
           set -euo pipefail
           xcrun simctl list devices available
 
-      - name: Select iPhone 15 or an available iOS Simulator
-        id: simulator
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          DEVICES="$(xcrun simctl list devices available)"
-          if grep -q 'iPhone 15 (' <<< "${DEVICES}"; then
-            DESTINATION='platform=iOS Simulator,name=iPhone 15'
-          else
-            UDID="$(xcrun simctl list devices available | sed -n 's/.*(\([A-F0-9-]*\)) (Shutdown\|Booted).*/\1/p' | head -n 1)"
-            if [[ -z "${UDID}" ]]; then
-              echo 'No available iOS Simulator was found.' >&2
-              exit 1
-            fi
-            DESTINATION="platform=iOS Simulator,id=${UDID}"
-          fi
-
-          echo "Using destination: ${DESTINATION}"
-          echo "destination=${DESTINATION}" >> "${GITHUB_OUTPUT}"
-
       - name: Run unit tests without code signing
         shell: bash
         run: |
@@ -85,7 +64,7 @@ jobs:
           xcodebuild test \
             -project SmartGradeScanner.xcodeproj \
             -scheme SmartGradeScanner \
-            -destination "${{ steps.simulator.outputs.destination }}" \
+            -destination 'generic/platform=iOS Simulator' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
