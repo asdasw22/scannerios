@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 struct StudentIDDetector: Sendable {
     func detect(definition: StudentIDDefinition, in image: CGImage, profile: CalibrationProfile) -> (value: String?, confidence: Double, warning: String?) {
