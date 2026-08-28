@@ -24,6 +24,6 @@ struct AnswerKeyView: View {
 
     }
 
-  private func syncKey() { var key = exam.answerKey ?? AnswerKey(name: "\(exam.name) Key"); if exam.answerKey == nil { context.insert(key) }; key.entries = Dictionary(uniqueKeysWithValues: exam.questions.compactMap { question in question.correctAnswer.map { choice in (question.number, choice) } }); exam.answerKey = key; try? context.save() }
+  private func syncKey() { let key = exam.answerKey ?? AnswerKey(name: "\(exam.name) Key"); if exam.answerKey == nil { context.insert(key) }; key.entries = Dictionary(uniqueKeysWithValues: exam.questions.compactMap { question in question.correctAnswer.map { choice in (question.number, choice) } }); exam.answerKey = key; try? context.save() }
 
 }

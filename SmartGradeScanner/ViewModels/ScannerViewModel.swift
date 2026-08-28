@@ -42,11 +42,12 @@ import UIKit
         error = nil
         result = nil
 
-        var definition = exam?.template?.definition ?? SampleDataSeeder.template()
+        var preparedDefinition = exam?.template?.definition ?? SampleDataSeeder.template()
         if let exam {
             let activeQuestionNumbers = Set(exam.questions.map(\.number))
-            definition.questions = definition.questions.filter { activeQuestionNumbers.contains($0.number) }
+            preparedDefinition.questions = preparedDefinition.questions.filter { activeQuestionNumbers.contains($0.number) }
         }
+        let definition = preparedDefinition
         guard !definition.questions.isEmpty else {
             error = .message("لا توجد مناطق أسئلة قابلة للمسح لهذا الاختبار. القالب المرفق يدعم ورقة الأسئلة من 1 إلى 20.")
             isProcessing = false

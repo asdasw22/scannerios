@@ -11,7 +11,7 @@ struct OCRService: Sendable {
             request.recognitionLevel = .fast
             request.usesLanguageCorrection = false
             try? VNImageRequestHandler(cgImage: image, orientation: .up).perform([request])
-            return (request.results as? [VNRecognizedTextObservation])?.compactMap { $0.topCandidates(1).first?.string } ?? []
+            return request.results?.compactMap { $0.topCandidates(1).first?.string } ?? []
         }.value
     }
 }
