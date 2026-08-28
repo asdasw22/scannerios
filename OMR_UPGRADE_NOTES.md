@@ -54,3 +54,10 @@ The revision follows established document/OMR principles: document rectangle loc
 - AppIcon catalog JSON parses successfully and points to a 1024×1024 RGB PNG.
 - GitHub Actions YAML parses successfully as YAML.
 - Full Xcode/iOS type-checking and device execution cannot be performed in this Linux container. Run the included GitHub Action or open the project in Xcode to perform the final Apple-platform build.
+
+## v4 - portrait reference-sheet fallback
+- Fixed the "alignment marks are insufficient/not distributed" failure on the supplied portrait 5-question reference image.
+- Root cause: the original 20-question template expected a different page aspect ratio and a 9-marker layout, while the supplied portrait sheet has 6 large square registration markers.
+- Added a separately calibrated 0.75 aspect-ratio portrait profile with six registration squares, exact 5-question bubble coordinates, and the 9-column Student ID grid.
+- Scanner now retries this portrait profile only when the primary template cannot be aligned, preserving the existing 20-question/custom-template path.
+- Alignment now respects each template's configured minimum marker count instead of hard-coding five markers for every six-marker layout.

@@ -48,6 +48,17 @@ import UIKit
             preparedDefinition.questions = preparedDefinition.questions.filter { activeQuestionNumbers.contains($0.number) }
         }
         let definition = preparedDefinition
+
+        // Keep a second built-in profile for the portrait five-question reference sheet.
+        // We only use it if the primary sheet cannot be aligned, so existing 20-question
+        // exams and custom templates keep their original behaviour.
+        var portraitFallback = SampleDataSeeder.portraitFiveQuestionTemplate()
+        if let exam {
+            let activeQuestionNumbers = Set(exam.questions.map(\.number))
+            portraitFallback.questions = portraitFallback.questions.filter { activeQuestionNumbers.contains($0.number) }
+        }
+        let fallbackDefinition: TemplateDefinition? = portraitFallback.questions.isEmpty ? nil : portraitFallback
+
         guard !definition.questions.isEmpty else {
             error = .message("لا توجد مناطق أسئلة قابلة للمسح لهذا الاختبار. القالب المرفق يدعم ورقة الأسئلة من 1 إلى 20.")
             isProcessing = false
@@ -64,10 +75,24 @@ import UIKit
             guard let self else { return }
             do {
                 let value = try await Task.detached(priority: .userInitiated) {
-                    try await omrProcessor.process(imageData: imageData,
-                                                   template: definition,
-                                                   answerKey: key,
-                                                   progress: updateProgress)
+                    do {
+                        return try await omrProcessor.process(imageData: imageData,
+                                                              template: definition,
+                                                              answerKey: key,
+                                                              progress: updateProgress)
+                    } catch OMRProcessorError.noMarkers {
+                        guard let fallbackDefinition else { throw OMRProcessorError.noMarkers }
+                        return try await omrProcessor.process(imageData: imageData,
+                                                              template: fallbackDefinition,
+                                                              answerKey: key,
+                                                              progress: updateProgress)
+                    } catch DocumentDetectionError.notFound {
+                        guard let fallbackDefinition else { throw DocumentDetectionError.notFound }
+                        return try await omrProcessor.process(imageData: imageData,
+                                                              template: fallbackDefinition,
+                                                              answerKey: key,
+                                                              progress: updateProgress)
+                    }
                 }.value
                 guard !Task.isCancelled else { return }
                 self.result = value

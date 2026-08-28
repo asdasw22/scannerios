@@ -52,9 +52,11 @@ struct TemplateAlignmentService: Sendable {
                                            coverage: 1)
         }
 
-        let required = template.markers.count >= 6
-            ? max(template.calibration.minimumMarkerCount, 5)
-            : min(template.markers.count, max(template.calibration.minimumMarkerCount, 3))
+        // Respect the marker count configured by each sheet profile. Some supported
+        // sheets use six large registration squares and can still be aligned reliably
+        // when one or two are partially cropped.
+        let required = min(template.markers.count,
+                           max(template.calibration.minimumMarkerCount, 3))
 
         guard markers.count >= 3, let initial = fitAffine(markers) else {
             return TemplateAlignmentReport(matchedMarkers: markers.count,

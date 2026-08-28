@@ -113,6 +113,68 @@ enum SampleDataSeeder {
         )
     }
 
+
+    // Portrait five-question sheet used by the in-app test/reference image.
+    // Coordinates were measured directly from the 1086 x 1448 reference sheet.
+    // This profile intentionally uses the six large square registration marks only;
+    // the small black bars beside the ID instructions are row guides, not alignment marks.
+    static func portraitFiveQuestionTemplate() -> TemplateDefinition {
+        let choices = Array(AnswerChoice.allCases)
+        let bubbleWidth = 0.03499
+        let bubbleHeight = 0.02693
+        let xStarts = [0.31031, 0.36464, 0.41989, 0.47514, 0.53039]
+        let rowY = [0.22997, 0.27210, 0.31423, 0.35635, 0.39779]
+
+        let questions = (1...5).map { number in
+            question(number: number,
+                     xStarts: xStarts,
+                     y: rowY[number - 1],
+                     width: bubbleWidth,
+                     height: bubbleHeight,
+                     choices: choices)
+        }
+
+        let markers: [MarkerDefinition] = [
+            MarkerDefinition(kind: .registration, expectedRect: NormalizedRect(x: 0.22007, y: 0.09945, width: 0.02486, height: 0.01934)),
+            MarkerDefinition(kind: .registration, expectedRect: NormalizedRect(x: 0.77901, y: 0.09945, width: 0.02486, height: 0.01934)),
+            MarkerDefinition(kind: .registration, expectedRect: NormalizedRect(x: 0.22007, y: 0.46961, width: 0.02486, height: 0.01934)),
+            MarkerDefinition(kind: .registration, expectedRect: NormalizedRect(x: 0.74494, y: 0.46961, width: 0.02578, height: 0.01934)),
+            MarkerDefinition(kind: .registration, expectedRect: NormalizedRect(x: 0.22007, y: 0.91022, width: 0.02486, height: 0.01934)),
+            MarkerDefinition(kind: .registration, expectedRect: NormalizedRect(x: 0.74494, y: 0.91022, width: 0.02578, height: 0.01934))
+        ]
+
+        let columnsX = [0.31492, 0.35451, 0.39411, 0.43278, 0.47330, 0.51381, 0.55341, 0.59300, 0.63352]
+        let rowsY = [0.55118, 0.58625, 0.62155, 0.65539, 0.68984, 0.72376, 0.75691, 0.79006, 0.82320, 0.85543]
+        let idBubbleWidth = 0.03131
+        let idBubbleHeight = 0.02348
+        let columns = columnsX.map {
+            NormalizedRect(x: $0, y: rowsY[0], width: idBubbleWidth, height: idBubbleHeight)
+        }
+        let rows = rowsY.map {
+            NormalizedRect(x: columnsX[0], y: $0, width: idBubbleWidth, height: idBubbleHeight)
+        }
+
+        var calibration = CalibrationProfile()
+        calibration.minimumMarkerCount = 4
+        calibration.markerReprojectionTolerance = 0.035
+        calibration.minimumLocalContrast = 0.045
+
+        return TemplateDefinition(
+            pageAspectRatio: 0.75,
+            questions: questions,
+            studentID: StudentIDDefinition(
+                region: NormalizedRect(x: 0.30018, y: 0.48757, width: 0.36464, height: 0.39296),
+                columns: columns,
+                digitRows: rows,
+                prefix: "320"
+            ),
+            markers: markers,
+            ignoredAreas: [],
+            calibration: calibration,
+            revision: 4
+        )
+    }
+
     private static func question(number: Int,
                                  xStarts: [Double],
                                  y: Double,
