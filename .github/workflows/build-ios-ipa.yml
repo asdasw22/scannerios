@@ -1,4 +1,4 @@
-name: Build SmartGrade Scanner (unsigned)
+name: Build SmartGrade Scanner unsigned IPA
 
 on:
   workflow_dispatch:
@@ -13,26 +13,27 @@ permissions:
 env:
   DEVELOPER_NAME: "Yousef Yousef"
   TEAM_NAME: "Yousef Yousef"
-  SCHEME: "SmartGradeScanner"
   PROJECT: "SmartGradeScanner.xcodeproj"
+  SCHEME: "SmartGradeScanner"
   APP_NAME: "SmartGradeScanner"
   BUNDLE_IDENTIFIER: "com.smartgrade.scanner"
+  SIMULATOR_DESTINATION: "platform=iOS Simulator,OS=latest"
 
 jobs:
   build-unsigned:
-    name: Build unsigned iOS app
+    name: Build unsigned iOS IPA
     runs-on: macos-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Select Xcode
+      - name: Select latest stable Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest-stable
 
-      - name: Show build environment
+      - name: Show Apple build environment
         shell: bash
         run: |
           set -euo pipefail
@@ -42,24 +43,37 @@ jobs:
           echo "Team name: ${TEAM_NAME}"
           echo "Signing: disabled"
 
-      - name: Validate project files
+      - name: Validate project files and iOS shared scheme
         shell: bash
         run: |
           set -euo pipefail
+
           test -f "${PROJECT}/project.pbxproj"
           test -f "${PROJECT}/xcshareddata/xcschemes/${SCHEME}.xcscheme"
           test -f "SmartGradeScanner/Resources/Info.plist"
           test -f "SmartGradeScanner/Resources/PrivacyInfo.xcprivacy"
+
+          grep -q 'BlueprintName="SmartGradeScanner"' "${PROJECT}/xcshareddata/xcschemes/${SCHEME}.xcscheme"
+          grep -q 'TARGETED_DEVICE_FAMILY = "1,2"' "${PROJECT}/project.pbxproj"
+          grep -q 'IPHONEOS_DEPLOYMENT_TARGET = 17.0' "${PROJECT}/project.pbxproj"
+          ! grep -q 'PRODUCT_TYPE.*macOS' "${PROJECT}/project.pbxproj"
+
           xcodebuild -list -project "${PROJECT}"
+
+      - name: List available iOS Simulator devices
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun simctl list devices available
 
       - name: Run unit tests without code signing
         shell: bash
         run: |
-          set -euo pipefail
+          set -o pipefail
           xcodebuild test \
             -project "${PROJECT}" \
             -scheme "${SCHEME}" \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -destination 'platform=iOS Simulator,OS=latest' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -70,8 +84,9 @@ jobs:
       - name: Build unsigned app for iOS device SDK
         shell: bash
         run: |
-          set -euo pipefail
-          rm -rf build
+          set -o pipefail
+          rm -rf build artifacts SmartGradeScanner-unsigned.ipa SmartGradeScanner-unsigned.app.zip
+
           xcodebuild build \
             -project "${PROJECT}" \
             -scheme "${SCHEME}" \
@@ -86,49 +101,55 @@ jobs:
             | tee build.log
 
       - name: Locate and verify unsigned app
-        id: locate-app
         shell: bash
         run: |
           set -euo pipefail
-          APP_PATH="$(find build/DerivedData/Build/Products -type d -name "${APP_NAME}.app" -path '*Release-iphoneos*' -print -quit)"
+
+          APP_PATH="$(find build/DerivedData/Build/Products -type d -path '*Release-iphoneos/*.app' -name "${APP_NAME}.app" -print -quit)"
           if [[ -z "${APP_PATH}" ]]; then
-            echo 'Unsigned .app was not produced.' >&2
+            echo "The unsigned app was not produced." >&2
             find build -maxdepth 8 -print >&2
             exit 1
           fi
 
           if [[ -e "${APP_PATH}/_CodeSignature" ]]; then
-            echo 'The app unexpectedly contains a code signature.' >&2
+            echo "The app unexpectedly contains a code signature." >&2
+            exit 1
+          fi
+
+          if [[ -e "${APP_PATH}/embedded.mobileprovision" ]]; then
+            echo "The app unexpectedly contains a provisioning profile." >&2
             exit 1
           fi
 
           mkdir -p artifacts/Payload
           cp -R "${APP_PATH}" artifacts/Payload/
-          echo "app_path=${APP_PATH}" >> "${GITHUB_OUTPUT}"
+          echo "APP_PATH=${APP_PATH}" >> "${GITHUB_ENV}"
 
-      - name: Package unsigned IPA and app archive
+      - name: Create unsigned IPA
         shell: bash
         run: |
           set -euo pipefail
-          cd artifacts
-          zip -qry "../SmartGradeScanner-unsigned.app.zip" Payload
-          zip -qry "../SmartGradeScanner-unsigned.ipa" Payload
-          cd ..
+
+          test -d "artifacts/Payload/${APP_NAME}.app"
+          ditto -c -k --sequesterRsrc --keepParent artifacts/Payload "SmartGradeScanner-unsigned.ipa"
+          ditto -c -k --sequesterRsrc --keepParent "artifacts/Payload/${APP_NAME}.app" "SmartGradeScanner-unsigned.app.zip"
 
           cat > artifacts/BUILD-METADATA.txt <<EOF
           Application: SmartGrade Scanner
           Bundle identifier: ${BUNDLE_IDENTIFIER}
           Developer: ${DEVELOPER_NAME}
           Team name: ${TEAM_NAME}
+          Scheme: ${SCHEME}
           Signing: disabled
           Code signing identity: none
+          Development team ID: none
           Provisioning profile: none
-          Distribution status: unsigned; not installable on a normal iPhone/iPad
-          Build scheme: ${SCHEME}
-          Xcode: $(xcodebuild -version | tr '\n' ' ')
+          Distribution status: unsigned; not installable on a normal iPhone or iPad
+          Simulator test destination: ${SIMULATOR_DESTINATION}
           EOF
 
-      - name: Upload unsigned app artifacts
+      - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: SmartGrade-Scanner-unsigned-${{ github.sha }}
